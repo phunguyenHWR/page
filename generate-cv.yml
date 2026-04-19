@@ -1,0 +1,57 @@
+# .github/workflows/generate-cv.yml
+#
+# Triggered whenever publications.bib is pushed to main.
+# Runs generate_cv.py → compiles cv.tex → commits cv.pdf back to the repo.
+# The website's "Download CV" button always serves the latest version.
+
+name: Generate CV PDF
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'data/publications.bib'
+      - 'scripts/generate_cv.py'
+  workflow_dispatch:           # allow manual trigger from GitHub Actions UI
+
+permissions:
+  contents: write              # needed to commit cv.pdf back
+
+jobs:
+  build-cv:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # 1. Check out the repository
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # 3. Parse .bib and generate cv.tex
+      - name: Generate cv.tex from publications.bib
+        run: python scripts/generate_cv.py
+
+      # 4. Compile LaTeX → PDF  (uses a pre-built TeX Live image)
+      - name: Compile LaTeX to PDF
+        uses: xu-cheng/latex-action@v3
+        with:
+          root_file: cv.tex
+          latexmk_use_xelatex: false
+          extra_system_packages: ""
+
+      # 5. Commit the generated PDF back to the repository
+      - name: Commit cv.pdf
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add cv.pdf cv.tex
+          # Only commit if something actually changed
+          git diff --staged --quiet \
+            || git commit -m "chore: auto-regenerate cv.pdf from publications.bib [skip ci]"
+          git push
